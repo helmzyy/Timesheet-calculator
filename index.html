@@ -7,44 +7,776 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container" id="appRoot">
+  <div class="container" id="app">
     <header class="topbar">
-      <h1>Time &amp; Pay Calculator</h1>
+      <h1>Time &amp; Pay Calculator — Pro</h1>
       <div class="top-actions">
-        <label class="auto-label"><input id="autoTheme" type="checkbox"> Auto</label>
         <label class="switch">
-          <input id="darkMode" type="checkbox">
-          <span class="slider"></span>
+          <input type="checkbox" id="darkToggle">
+          <span>Dark</span>
         </label>
-        <span class="switch-label">Dark</span>
+        <div class="sep"></div>
+        <button id="copySummary" class="ghost small">Copy Gross/Net</button>
       </div>
     </header>
-    <!-- body same as before ... shortened for brevity -->
+
+    <!-- Help -->
+    <section class="panel">
+      <details id="helpDetails">
+        <summary>Help &amp; Format</summary>
+        <div class="details-body">
+          <p>Paste one shift per line. Examples:</p>
+<pre class="code">8/27/25 5:00am-9:00pm 30 min lunch
+8/28/25 6:15am-6:30pm no lunch
+9/1/25 Labor Day</pre>
+          <ul>
+            <li>AM/PM required. Overnight shifts are supported.</li>
+            <li>Lunch: <em>no lunch</em>, <em>30 min lunch</em>, or <em>1 hr lunch</em>.</li>
+            <li>Overtime is computed per work‑week at 40h → 1.5×.</li>
+            <li>Rounding rules and auto‑break can be configured below.</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+
+    <!-- Paste -->
+    <section class="panel">
+      <h2>Paste Hours</h2>
+      <textarea id="input" placeholder="Paste hours here..."></textarea>
+      <div id="parseWarnings" class="warn"></div>
+      <div class="actions under sticky-mobile">
+        <button id="calc" class="primary">Calculate</button>
+        <button id="clearInput">Clear</button>
+        <button id="copyOut">Copy Result</button>
+        <button id="csv">Download CSV</button>
+        <button id="exportJSON" class="ghost">Export History JSON</button>
+        <label class="import">
+          <input id="importJSON" type="file" accept="application/json">
+          <span class="ghost">Import History JSON</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section class="panel">
+      <details id="settingsDetails">
+        <summary>Pay, Withholdings &amp; Rules</summary>
+        <div class="details-body">
+          <div class="grid three">
+            <div class="field">
+              <label for="rate">Base Rate ($/hr)</label>
+              <input id="rate" type="number" step="0.01" value="25">
+            </div>
+            <div class="field">
+              <label for="weekStart">Week Starts</label>
+              <select id="weekStart">
+                <option value="1">Mon</option><option value="2">Tue</option><option value="3">Wed</option>
+                <option value="4">Thu</option><option value="5">Fri</option><option value="6">Sat</option><option value="0">Sun</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="roundRule">Rounding</label>
+              <select id="roundRule">
+                <option value="0">None</option>
+                <option value="5">Nearest 5 min</option>
+                <option value="15">Nearest 15 min</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid three">
+            <div class="field">
+              <label for="weekendRate">Weekend Rate ($/hr)</label>
+              <input id="weekendRate" type="number" step="0.01" value="25">
+              <label class="inline"><input id="enableWeekendRate" type="checkbox"> Use weekend rate (Sat/Sun)</label>
+            </div>
+            <div class="field">
+              <label for="autoBreakMin">Auto Break (min)</label>
+              <input id="autoBreakMin" type="number" step="1" value="0">
+              <label class="inline"><input id="autoBreakEnable" type="checkbox"> If shift &gt; 6h</label>
+            </div>
+            <div class="field">
+              <label for="retirePct">Retirement/Savings (%)</label>
+              <input id="retirePct" type="number" step="0.01" value="0">
+              <div class="tiny muted">Deducted from gross (post-OT)</div>
+            </div>
+          </div>
+
+          <div class="grid two">
+            <div class="field">
+              <label>Taxes (%)</label>
+              <div class="grid three">
+                <input id="fed" type="number" step="0.01" value="12" placeholder="Federal %">
+                <input id="ss" type="number" step="0.01" value="6.2" placeholder="SS %">
+                <input id="med" type="number" step="0.01" value="1.45" placeholder="Medicare %">
+              </div>
+            </div>
+            <div class="field">
+              <label>Fixed Withholdings ($/week)</label>
+              <div class="grid two">
+                <input id="health" type="number" step="0.01" value="0" placeholder="Healthcare $">
+                <input id="misc" type="number" step="0.01" value="0" placeholder="Misc $">
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Custom Deductions</label>
+            <div id="deductions"></div>
+            <div class="actions">
+              <button id="addDeduction" class="secondary small">Add Deduction</button>
+            </div>
+            <div class="tiny muted">Each deduction can be a % of gross or a fixed $ per week.</div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- Clock in/out -->
+    <section class="panel">
+      <details id="clockDetails">
+        <summary>Clock In / Out</summary>
+        <div class="details-body">
+          <div class="grid four">
+            <div class="field">
+              <label for="ciDate">Date</label>
+              <input id="ciDate" type="date">
+            </div>
+            <div class="field">
+              <label for="ciIn">Clock In</label>
+              <input id="ciIn" type="time">
+            </div>
+            <div class="field">
+              <label for="ciOut">Clock Out</label>
+              <input id="ciOut" type="time">
+            </div>
+            <div class="field">
+              <label for="ciLunch">Lunch (min)</label>
+              <input id="ciLunch" type="number" step="1" value="30">
+            </div>
+          </div>
+          <div class="actions">
+            <button id="startTimer" class="secondary">Start Timer</button>
+            <button id="stopTimer" class="secondary">Stop &amp; Add</button>
+            <button id="addClock" class="primary">Add to List</button>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- Results -->
+    <section class="panel">
+      <h2>Results</h2>
+      <div id="grouped"></div>
+      <pre id="output" class="mono"></pre>
+    </section>
+
+    <!-- Weekly chart -->
+    <section class="panel">
+      <h2>Weekly Net vs Gross</h2>
+      <div id="chart"></div>
+    </section>
+
+    <!-- History -->
+    <section class="panel">
+      <div class="header-row">
+        <h2>History</h2>
+        <div class="actions">
+          <button id="clearHistory" class="ghost">Clear History</button>
+          <button id="exportHistCSV" class="ghost">Export Full History CSV</button>
+        </div>
+      </div>
+      <div class="controls">
+        <input id="histSearch" placeholder="Filter (text/date e.g. 8/24)">
+        <select id="histFilterHrs">
+          <option value="">All hours</option>
+          <option value=">50">&gt; 50 hrs</option>
+          <option value=">60">&gt; 60 hrs</option>
+          <option value="<40">&lt; 40 hrs</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table class="table" id="history">
+          <thead>
+            <tr>
+              <th>Range</th><th>Total Hours</th><th>Rate</th><th>Gross</th><th>Net</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="histBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
 <script>
 (function(){
   const $ = s => document.querySelector(s);
-  const darkMode = $('#darkMode');
-  const LS_UI = 'tpc.ui.v1';
-  function saveJSON(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
-  function loadJSON(k, fb){ try{ const v = JSON.parse(localStorage.getItem(k)||''); return v ?? fb; } catch(e){ return fb; } }
+  const $$ = s => Array.from(document.querySelectorAll(s));
 
-  function applyTheme(){
-    const ui = loadJSON(LS_UI, {});
-    let dark = ui.dark;
-    if(dark===undefined){ // no pref saved
-      dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  // Elements
+  const input = $('#input'), warnings = $('#parseWarnings');
+  const grouped = $('#grouped'), output = $('#output');
+  const chart = $('#chart');
+  const helpDetails = $('#helpDetails');
+  const settingsDetails = $('#settingsDetails');
+  const clockDetails = $('#clockDetails');
+  const darkToggle = $('#darkToggle');
+
+  // Buttons
+  const btnCalc = $('#calc'), btnClearInput = $('#clearInput');
+  const btnCopyOut = $('#copyOut'), btnCopySummary = $('#copySummary');
+  const btnCSV = $('#csv'), btnExportJSON = $('#exportJSON');
+  const fileImport = $('#importJSON');
+  const btnClearHistory = $('#clearHistory'), btnExportHistCSV = $('#exportHistCSV');
+
+  // Pay & settings
+  const rateEl = $('#rate'), weekendRateEl = $('#weekendRate'), enableWeekendRateEl = $('#enableWeekendRate');
+  const fedEl = $('#fed'), ssEl = $('#ss'), medEl = $('#med'), retirePctEl = $('#retirePct');
+  const healthEl = $('#health'), miscEl = $('#misc');
+  const weekStartEl = $('#weekStart'), roundingEl = $('#roundRule');
+  const autoBreakEnableEl = $('#autoBreakEnable'), autoBreakMinEl = $('#autoBreakMin');
+
+  // Deductions
+  const deductionsBox = $('#deductions'), addDeductionBtn = $('#addDeduction');
+
+  // Clock in/out
+  const ciDate = $('#ciDate'), ciIn = $('#ciIn'), ciOut = $('#ciOut'), ciLunch = $('#ciLunch');
+  const startTimer = $('#startTimer'), stopTimer = $('#stopTimer'), addClock = $('#addClock');
+  let timerStart = null;
+
+  // History
+  const histBody = $('#histBody'), histSearch = $('#histSearch'), histFilterHrs = $('#histFilterHrs');
+
+  // Storage keys
+  const LS_SETTINGS = 'timepay.settings.v2';
+  const LS_OPEN = 'timepay.openstates.v2';
+  const LS_HISTORY = 'timepay.history.v4';
+
+  // Init
+  (function init(){
+    // Default date in clock
+    ciDate.valueAsDate = new Date();
+
+    // Restore open states
+    const os = loadJSON(LS_OPEN, {});
+    setOpen(helpDetails, os.helpOpen);
+    setOpen(settingsDetails, os.settingsOpen !== false); // default open
+    setOpen(clockDetails, os.clockOpen);
+
+    [helpDetails, settingsDetails, clockDetails].forEach(el => {
+      el.addEventListener('toggle', ()=>{
+        saveJSON(LS_OPEN, {
+          helpOpen: helpDetails.open,
+          settingsOpen: settingsDetails.open,
+          clockOpen: clockDetails.open
+        });
+      });
+    });
+
+    // Restore settings
+    const s = loadJSON(LS_SETTINGS, null);
+    if(s){
+      set(rateEl, s.rate); set(weekendRateEl, s.weekendRate); set(enableWeekendRateEl, s.enableWeekendRate, true);
+      set(fedEl, s.fed); set(ssEl, s.ss); set(medEl, s.med); set(retirePctEl, s.retirePct);
+      set(healthEl, s.health); set(miscEl, s.misc); set(weekStartEl, s.weekStart); set(roundingEl, s.roundRule);
+      set(autoBreakEnableEl, s.autoBreakEnable, true); set(autoBreakMinEl, s.autoBreakMin);
+      set(darkToggle, s.dark, true);
+      if(Array.isArray(s.customDeds)){ s.customDeds.forEach(addDeductionRowFromObj); }
+    } else {
+      addDeductionRow(); // start with one empty row for convenience
     }
-    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-    darkMode.checked = !!dark;
+    applyDarkMode(darkToggle.checked);
+
+    // Events
+    $$('#rate,#weekendRate,#enableWeekendRate,#fed,#ss,#med,#retirePct,#health,#misc,#weekStart,#roundRule,#autoBreakEnable,#autoBreakMin')
+      .forEach(el => el.addEventListener('input', persistSettings));
+    darkToggle.addEventListener('change', ()=>{ persistSettings(); applyDarkMode(darkToggle.checked); });
+
+    addDeductionBtn.addEventListener('click', (e)=>{ e.preventDefault(); addDeductionRow(); persistSettings(); });
+
+    btnCalc.addEventListener('click', calculate);
+    btnClearInput.addEventListener('click', ()=>{ input.value=''; grouped.innerHTML=''; output.textContent=''; warnings.textContent=''; chart.innerHTML=''; });
+    btnCopyOut.addEventListener('click', ()=> navigator.clipboard.writeText(output.textContent));
+    btnCopySummary.addEventListener('click', copySummary);
+    btnCSV.addEventListener('click', downloadCurrentCSV);
+    btnExportJSON.addEventListener('click', exportHistoryJSON);
+    fileImport.addEventListener('change', importHistoryJSON);
+
+    startTimer.addEventListener('click', ()=>{ timerStart = new Date(); startTimer.disabled = true; stopTimer.disabled = false; });
+    stopTimer.addEventListener('click', ()=>{
+      if(!timerStart){ alert('Timer not started.'); return; }
+      const end = new Date();
+      const d = timerStart;
+      const date = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+      const inStr = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+      const outStr = `${pad2(end.getHours())}:${pad2(end.getMinutes())}`;
+      appendClockLine(date, inStr, outStr, ciLunch.value||'0');
+      timerStart = null; startTimer.disabled = false; stopTimer.disabled = true;
+    });
+    addClock.addEventListener('click', ()=>{
+      if(!ciDate.value || !ciIn.value || !ciOut.value){ alert('Set Date, In, and Out.'); return; }
+      appendClockLine(ciDate.value, ciIn.value, ciOut.value, ciLunch.value||'0');
+    });
+
+    renderHistory(); // initial history render
+  })();
+
+  function set(el, val, isBool){
+    if(el==null || val==null) return;
+    if(isBool) el.checked = !!val;
+    else el.value = val;
   }
-  function setDark(val){
-    const ui = loadJSON(LS_UI, {});
-    ui.dark = !!val;
-    saveJSON(LS_UI, ui);
-    applyTheme();
+
+  function setOpen(detailsEl, open){
+    if(open) detailsEl.setAttribute('open',''); else detailsEl.removeAttribute('open');
   }
-  darkMode.addEventListener('change', e=> setDark(e.target.checked));
-  applyTheme();
-})();</script>
+
+  function persistSettings(){
+    const s = {
+      rate: num(rateEl.value), weekendRate: num(weekendRateEl.value), enableWeekendRate: enableWeekendRateEl.checked,
+      fed: num(fedEl.value), ss: num(ssEl.value), med: num(medEl.value), retirePct: num(retirePctEl.value),
+      health: num(healthEl.value), misc: num(miscEl.value),
+      weekStart: weekStartEl.value, roundRule: roundingEl.value,
+      autoBreakEnable: autoBreakEnableEl.checked, autoBreakMin: num(autoBreakMinEl.value),
+      dark: darkToggle.checked,
+      customDeds: getCustomDeductions()
+    };
+    saveJSON(LS_SETTINGS, s);
+  }
+
+  function getCustomDeductions(){
+    const rows = $$('#deductions .ded-row');
+    return rows.map(row => {
+      const name = row.querySelector('.ded-name').value.trim();
+      const mode = row.querySelector('.ded-mode').value; // percent or fixed
+      const value = num(row.querySelector('.ded-value').value);
+      return {name, mode, value};
+    });
+  }
+
+  function addDeductionRow(name='', mode='percent', value=''){
+    const row = document.createElement('div');
+    row.className = 'ded-row';
+    row.innerHTML = `
+      <input class="ded-name" placeholder="Name (e.g., Union, 401k)">
+      <select class="ded-mode"><option value="percent">%</option><option value="fixed">$</option></select>
+      <input class="ded-value" type="number" step="0.01" placeholder="Value">
+      <button class="danger small ded-del" title="Remove">Delete</button>
+    `;
+    deductionsBox.appendChild(row);
+    const [nEl,mEl,vEl,delBtn] = row.children;
+    nEl.value = name; mEl.value = mode; vEl.value = value;
+    [nEl,mEl,vEl].forEach(el => el.addEventListener('input', persistSettings));
+    delBtn.addEventListener('click', (e)=>{ e.preventDefault(); row.remove(); persistSettings(); });
+  }
+  function addDeductionRowFromObj(o){ addDeductionRow(o.name||'', o.mode||'percent', (o.value!=null?o.value:'')); }
+
+  // Utils
+  function pad2(n){ return String(n).padStart(2,'0'); }
+  function saveJSON(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+  function loadJSON(k, fallback){ try{ const v = JSON.parse(localStorage.getItem(k)||''); return (v==null?fallback:v); } catch(e){ return fallback; } }
+  function num(v){ const n = parseFloat(v); return isFinite(n)?n:0; }
+  function toAmPm(hhmm){
+    const [H,M] = hhmm.split(':').map(x=>parseInt(x,10));
+    const ap = H>=12?'pm':'am';
+    const h = (H%12)||12;
+    return `${h}:${pad2(M)}${ap}`;
+  }
+  function formatMDY(dateStr){ // YYYY-MM-DD -> M/D/YY
+    const [y,m,d] = dateStr.split('-').map(x=>parseInt(x,10));
+    return `${m}/${d}/${String(y).slice(-2)}`;
+  }
+  function appendClockLine(dateISO, inHHMM, outHHMM, lunchMin){
+    const line = `${formatMDY(dateISO)} ${toAmPm(inHHMM)}-${toAmPm(outHHMM)} ${(parseInt(lunchMin,10)||0)>0 ? (parseInt(lunchMin,10)+' min lunch') : 'no lunch'}`;
+    input.value = (input.value.trim()? input.value+'\n' : '') + line;
+  }
+
+  // Parsing
+  function parseDateToken(tok){
+    const parts = tok.split(/[\/\-\.]/);
+    if(parts.length < 2) return null;
+    let m = parseInt(parts[0],10);
+    let d = parseInt(parts[1],10);
+    let y = (parts.length >= 3) ? parseInt(parts[2],10) : (new Date().getFullYear());
+    if(y < 100) y += 2000;
+    if(!(m>=1 && m<=12 && d>=1 && d<=31)) return null;
+    return {y,m,d};
+  }
+  function toDateTime(y,m,d,hhmmAP){
+    const t = hhmmAP.match(/(\d{1,2}):(\d{2})(am|pm)/i);
+    let hh = parseInt(t[1],10), mm = parseInt(t[2],10);
+    const ap = t[3].toLowerCase();
+    if(hh===12){ hh = (ap==='am') ? 0 : 12; } else if(ap==='pm'){ hh += 12; }
+    return new Date(y, m-1, d, hh, mm, 0, 0);
+  }
+  function roundMinutes(mins, rule){
+    const step = parseInt(rule,10)||0;
+    if(!step) return mins;
+    return Math.round(mins/step)*step;
+  }
+  function parseLine(line){
+    const raw = line.trim();
+    if(!raw) return null;
+    if(/holiday/i.test(raw) && !/paid/i.test(raw)){ // treat generic holiday/off as zero minutes
+      const dt = parseDateToken(raw.split(/\s+/)[0]);
+      return {ok:true, minutes:0, date:dt, raw, note:'Holiday/Off', weekday:null, lunch:0};
+    }
+    const dateTok = raw.split(/\s+/)[0];
+    const dt = parseDateToken(dateTok);
+    const m = raw.match(/(\d{1,2}:\d{2}\s*[ap]m)\s*-\s*(\d{1,2}:\d{2}\s*[ap]m)/i);
+    if(!m){ return {ok:false, minutes:0, date:dt, raw, note:'Unrecognized', weekday:null, lunch:0}; }
+    const startStr = m[1].replace(/\s+/g,'').toLowerCase();
+    const endStr = m[2].replace(/\s+/g,'').toLowerCase();
+    let lunchMin = 0;
+    const lunchMinMatch = raw.match(/(\d+)\s*(?:min|minutes)\s*lunch/i);
+    if(lunchMinMatch) lunchMin = parseInt(lunchMinMatch[1],10);
+    else if(/no\s*lunch/i.test(raw)) lunchMin = 0;
+    else {
+      const hrMatch = raw.match(/(\d+)\s*(?:hr|hour|hours)\s*lunch/i);
+      if(hrMatch) lunchMin = parseInt(hrMatch[1],10)*60;
+    }
+    if(!dt){ return {ok:false, minutes:0, date:null, raw, note:'Bad date', weekday:null, lunch:lunchMin}; }
+    const start = toDateTime(dt.y, dt.m, dt.d, startStr);
+    let end = toDateTime(dt.y, dt.m, dt.d, endStr);
+    if(end <= start){ end = new Date(end.getTime() + 86400000); }
+    let mins = Math.max(0, Math.round((end - start)/60000) - lunchMin);
+    const rule = roundingEl.value;
+    mins = roundMinutes(mins, rule);
+    const weekday = new Date(dt.y, dt.m-1, dt.d).getDay();
+    return {ok:true, minutes:mins, date:dt, raw, note:'', weekday, lunch:lunchMin};
+  }
+
+  // Payroll math
+  function groupByWeeks(rows){
+    const startDow = parseInt(weekStartEl.value,10); // 0=Sun..6=Sat
+    const groups = {}; // key: ISO date of week start
+    rows.forEach(r => {
+      if(!r.date) return;
+      const d = new Date(r.date.y, r.date.m-1, r.date.d);
+      const dow = d.getDay();
+      const delta = (dow - startDow + 7) % 7;
+      const weekStart = new Date(d); weekStart.setDate(d.getDate() - delta);
+      const key = weekStart.toISOString().slice(0,10); // YYYY-MM-DD
+      if(!groups[key]) groups[key] = {weekStart, lines:[]};
+      groups[key].lines.push(r);
+    });
+    return groups;
+  }
+  function computeWeek(group){
+    // Regular vs weekend rate
+    const baseRate = num(rateEl.value);
+    const weekendRate = enableWeekendRateEl.checked ? num(weekendRateEl.value||baseRate) : baseRate;
+
+    // sum minutes, and compute gross respecting weekend rate per line
+    let minutes = 0;
+    let minutesByDay = 0;
+    let grossBaseHours = 0; // for OT we count hours without multiplier
+    let gross = 0;
+
+    group.lines.forEach(r => {
+      const mins = r.minutes;
+      minutes += mins;
+      grossBaseHours += mins/60;
+
+      const isWeekend = (r.weekday===0 || r.weekday===6);
+      const rateForLine = (isWeekend ? weekendRate : baseRate);
+      gross += (mins/60) * rateForLine;
+    });
+
+    // Apply overtime multiplier (1.5x) on hours beyond 40 using base rate
+    const reg = Math.min(grossBaseHours, 40);
+    const ot = Math.max(0, grossBaseHours - 40);
+    const baseGrossOTAdj = reg * baseRate + ot * baseRate * 1.5;
+
+    // Adjust the already computed line-based gross to include OT difference relative to base rate for equitable calc:
+    // We'll combine: gross_at_line_rates for 40h equivalent + extra OT uplift at baseRate*0.5 for overtime hours.
+    // Uplift = ot * baseRate * 0.5
+    const uplift = ot * baseRate * 0.5;
+    const finalGross = gross + uplift;
+
+    return {minutes, hours: minutes/60, gross: finalGross, reg, ot};
+  }
+
+  function applyDeductions(gross){
+    const fed = num(fedEl.value), ss = num(ssEl.value), med = num(medEl.value);
+    const health = num(healthEl.value), misc = num(miscEl.value);
+    const retire = num(retirePctEl.value);
+
+    const pct = (fed + ss + med + retire)/100;
+    let net = gross * (1 - pct) - (health + misc);
+
+    // Custom deductions
+    const deds = getCustomDeductions();
+    let dedDesc = [];
+    deds.forEach(d => {
+      if(!d.name && !d.value) return;
+      if(d.mode==='percent'){
+        const val = gross * (num(d.value)/100);
+        net -= val; dedDesc.push(`${d.name||'Ded'} ${num(d.value)}%`);
+      } else {
+        const val = num(d.value);
+        net -= val; dedDesc.push(`${d.name||'Ded'} $${val.toFixed(2)}`);
+      }
+    });
+
+    return {net: Math.max(0, net), pctTaxes: fed+ss+med, fixed: health+misc, retirePct: retire, custom: dedDesc};
+  }
+
+  // Render
+  function render(groups, totals){
+    grouped.innerHTML = '';
+    output.textContent = '';
+    chart.innerHTML = '';
+
+    let text = [];
+    const weeks = Object.keys(groups).sort(); // chronological
+
+    // Table for chart data
+    const chartData = [];
+
+    weeks.forEach(k => {
+      const g = groups[k];
+      // Week label
+      const ws = new Date(g.weekStart);
+      const range = `${ws.getMonth()+1}/${ws.getDate()}–${(new Date(ws.getFullYear(), ws.getMonth(), ws.getDate()+6)).getMonth()+1}/${(new Date(ws.getFullYear(), ws.getMonth(), ws.getDate()+6)).getDate()}`;
+
+      const wrap = document.createElement('details');
+      wrap.open = true;
+      const summary = document.createElement('summary');
+      summary.textContent = `Week of ${range}`;
+      wrap.appendChild(summary);
+
+      const body = document.createElement('div');
+      body.className = 'details-body';
+
+      // Line cards for the week
+      g.lines.forEach(r => {
+        const card = document.createElement('div'); card.className = 'card';
+        card.innerHTML = `<div class="card-row"><div>${r.raw}</div><div class="pill">${fmtHM(r.minutes)}</div></div>`;
+        body.appendChild(card);
+        text.push(`- ${r.raw} → ${fmtHM(r.minutes)}`);
+      });
+
+      // Week totals
+      const c = computeWeek(g);
+      const ded = applyDeductions(c.gross);
+      const totalsEl = document.createElement('div');
+      totalsEl.className = 'totals';
+      totalsEl.innerHTML = `
+        <div class="total-line"><span>Weekly Time</span><strong>${fmtHM(c.minutes)} (${c.hours.toFixed(2)} hrs)</strong></div>
+        <div class="total-line"><span>Weekly Gross</span><strong>${fmtCurrency(c.gross)}</strong></div>
+        <div class="total-line"><span>Weekly Net (est.)</span><strong>${fmtCurrency(ded.net)}</strong></div>
+      `;
+      body.appendChild(totalsEl);
+      wrap.appendChild(body);
+      grouped.appendChild(wrap);
+
+      // Build text and chart row
+      text.push(`Weekly Total: ${fmtHM(c.minutes)} (${c.hours.toFixed(2)} hrs)`);
+      text.push(`Weekly Gross: ${fmtCurrency(c.gross)}`);
+      text.push(`Weekly Net (est.): ${fmtCurrency(ded.net)}`);
+      text.push('');
+
+      chartData.push({label: range, gross: c.gross, net: ded.net});
+      g._calc = {gross: c.gross, net: ded.net, minutes: c.minutes, hours: c.hours};
+    });
+
+    // Overall totals
+    text.push(`Overall Total: ${fmtHM(totals.minutes)} (${totals.hours.toFixed(2)} hrs)`);
+    text.push(`Overall Gross: ${fmtCurrency(totals.gross)}`);
+    text.push(`Overall Net (est.): ${fmtCurrency(totals.net)}`);
+    output.textContent = text.join('\n');
+
+    // Chart
+    renderBarChart(chart, chartData);
+
+    // Save to history (one entry per overall calc with visible range)
+    if(weeks.length){
+      const firstKey = weeks[0];
+      const lastKey = weeks[weeks.length-1];
+      const firstDate = new Date(firstKey);
+      const lastDate = new Date(lastKey); lastDate.setDate(lastDate.getDate()+6);
+      const label = `${firstDate.getMonth()+1}/${firstDate.getDate()}–${lastDate.getMonth()+1}/${lastDate.getDate()}`;
+      addHistoryEntry(label, totals.hours, num(rateEl.value), totals.gross, totals.net);
+    }
+  }
+
+  function renderBarChart(container, data){
+    if(!data.length){ container.textContent = 'No weekly data.'; return; }
+    const max = Math.max(...data.map(d=>d.gross));
+    const width = 640, height = 240, pad = 30;
+    const barW = Math.max(16, Math.floor((width - pad*2) / (data.length*2)));
+    const gap = barW;
+
+    let svg = `<svg viewBox="0 0 ${width} ${height}" class="chart-svg">`;
+    svg += `<line x1="${pad}" y1="${height-pad}" x2="${width-pad}" y2="${height-pad}" class="axis"/>`;
+
+    data.forEach((d,i)=>{
+      const x = pad + i*(barW*2);
+      const gh = Math.round((d.gross/max)*(height-pad*2));
+      const nh = Math.round((d.net/max)*(height-pad*2));
+      const gx = x, nx = x + barW*0.6;
+      const gy = height - pad - gh;
+      const ny = height - pad - nh;
+      svg += `<rect x="${gx}" y="${gy}" width="${barW*0.6}" height="${gh}" class="bar gross"/>`;
+      svg += `<rect x="${nx}" y="${ny}" width="${barW*0.6}" height="${nh}" class="bar net"/>`;
+      svg += `<text x="${x}" y="${height-8}" class="tick">${d.label}</text>`;
+    });
+    svg += `</svg>`;
+    container.innerHTML = svg;
+  }
+
+  // History
+  function addHistoryEntry(range, totalHours, rate, gross, net){
+    const list = loadJSON(LS_HISTORY, []);
+    list.push({range, totalHours, rate, gross, net, createdAt: new Date().toISOString()});
+    saveJSON(LS_HISTORY, list);
+    renderHistory();
+  }
+  function renderHistory(){
+    const list = loadJSON(LS_HISTORY, []);
+    const q = histSearch.value.trim().toLowerCase();
+    const f = histFilterHrs.value;
+    histBody.innerHTML = '';
+
+    list.forEach((e, idx)=>{
+      if(q && !JSON.stringify(e).toLowerCase().includes(q)) return;
+      if(f){
+        if(f[0]==='>' && !(e.totalHours > parseFloat(f.slice(1)))) return;
+        if(f[0]==='<' && !(e.totalHours < parseFloat(f.slice(1)))) return;
+      }
+      const tr = document.createElement('tr');
+      if(e.totalHours > 50) tr.classList.add('warn-row');
+      tr.innerHTML = `
+        <td>${e.range}</td>
+        <td>${e.totalHours.toFixed(2)}</td>
+        <td>${fmtCurrency(e.rate)}</td>
+        <td>${fmtCurrency(e.gross)}</td>
+        <td>${fmtCurrency(e.net)}</td>
+        <td class="right"><button class="danger small" data-del="${idx}">Delete</button></td>
+      `;
+      histBody.appendChild(tr);
+    });
+
+    $$('#histBody [data-del]').forEach(btn=> btn.addEventListener('click', (ev)=>{
+      const i = parseInt(ev.currentTarget.getAttribute('data-del'),10);
+      const list = loadJSON(LS_HISTORY, []);
+      list.splice(i,1); saveJSON(LS_HISTORY, list); renderHistory();
+    }));
+  }
+  function clearHistory(){ localStorage.removeItem(LS_HISTORY); renderHistory(); }
+  function exportHistoryJSON(){
+    const list = loadJSON(LS_HISTORY, []);
+    const blob = new Blob([JSON.stringify(list,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'history.json'; a.click();
+    URL.revokeObjectURL(url);
+  }
+  function importHistoryJSON(ev){
+    const file = ev.target.files && ev.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const data = JSON.parse(reader.result);
+        if(Array.isArray(data)){
+          saveJSON(LS_HISTORY, data); renderHistory();
+        } else { alert('Invalid JSON'); }
+      } catch(e){ alert('Invalid JSON'); }
+    };
+    reader.readAsText(file);
+    ev.target.value = '';
+  }
+  function downloadCurrentCSV(){
+    const rows = output.textContent.trim().split('\n');
+    let csv = 'Line,Value\n';
+    rows.forEach(r=>{
+      const safe = r.replace(/"/g,'""');
+      csv += `"${safe}",\n`;
+    });
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'hours.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+  btnClearHistory.addEventListener('click', clearHistory);
+  btnExportHistCSV.addEventListener('click', ()=>{
+    const list = loadJSON(LS_HISTORY, []);
+    const headers = ['Range','TotalHours','Rate','Gross','Net','CreatedAt'];
+    let csv = headers.join(',') + '\n';
+    list.forEach(e=>{
+      csv += [e.range, e.totalHours, e.rate, e.gross, e.net, e.createdAt].join(',') + '\n';
+    });
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'history.csv'; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Calculate
+  function calculate(){
+    warnings.textContent = '';
+    // Parse lines
+    const rawLines = input.value.split(/\r?\n/).filter(s=>s.trim().length>0);
+    const rows = rawLines.map(parseLine).filter(Boolean);
+
+    // Inline validation
+    const bads = rows.filter(r => !r.ok);
+    if(bads.length){
+      warnings.textContent = `Warning: ${bads.length} line(s) unrecognized. They were included as 0: ${bads.slice(0,3).map(b=>b.raw).join(' | ')}${bads.length>3?' ...':''}`;
+    }
+
+    // Auto-break rule
+    if(autoBreakEnableEl.checked){
+      const abMin = num(autoBreakMinEl.value);
+      rows.forEach(r => {
+        const hrs = r.minutes/60;
+        if(hrs > 6 && abMin > 0){
+          r.minutes = Math.max(0, r.minutes - abMin);
+        }
+      });
+    }
+
+    // Group by week
+    const groups = groupByWeeks(rows.filter(r=>r.ok));
+    const weeks = Object.keys(groups);
+    let totalMinutes = 0, totalGross = 0, totalNet = 0;
+
+    weeks.forEach(k => {
+      const calc = computeWeek(groups[k]);
+      const ded = applyDeductions(calc.gross);
+      groups[k]._calc = calc;
+      groups[k]._net = ded.net;
+      totalMinutes += calc.minutes;
+      totalGross += calc.gross;
+      totalNet += ded.net;
+    });
+
+    render(groups, {minutes: totalMinutes, hours: totalMinutes/60, gross: totalGross, net: totalNet});
+  }
+
+  // Dark mode
+  function applyDarkMode(isDark){
+    document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+  }
+
+  // Copy gross/net only
+  function copySummary(){
+    const list = loadJSON(LS_HISTORY, []);
+    if(!list.length){ navigator.clipboard.writeText('No history yet.'); return; }
+    const last = list[list.length-1];
+    const txt = `Range ${last.range}: Gross ${fmtCurrency(last.gross)} | Net ${fmtCurrency(last.net)} | Hours ${last.totalHours.toFixed(2)}`;
+    navigator.clipboard.writeText(txt);
+  }
+
+  // Helpers used by multiple functions
+  function fmtHM(mins){ const h=Math.floor(mins/60), m=mins%60; return `${h}:${String(m).padStart(2,'0')}`; }
+  function fmtCurrency(n){ return '$'+(Math.round(n*100)/100).toFixed(2); }
+
+})();
+</script>
 </body>
 </html>
